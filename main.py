@@ -3,7 +3,7 @@ import numpy as np
 from datetime import datetime
 from tkinter import *
 from tkinter import filedialog, messagebox
-
+import tkinter as tk
 # Function to read until null in Excel
 def read_until_null_excel(file_path, sheet_name):
     df = pd.read_excel(file_path, sheet_name=sheet_name)
@@ -68,8 +68,34 @@ def sum_pairs(df):
     
     return result
 
+def parse_dates(date_str):
+    try:
+        return pd.to_datetime(date_str, format='%Y-%m-%d')
+    except ValueError:
+        return pd.NA
+    
+# get the first day between Ship and Firm when start to validation
+def returnS_F(df_1):
+    result_list = []
+    for row in range(0, len(df_1), 2):
+        found = False
+        for col in range(4, len(df_1.columns) - 2):
+            if df_1.iloc[row, col] > 0:
+                result_list.append(df_1.columns[col])
+                found = True
+                break
+        if not found:
+            if row + 1 < len(df_1):
+                for col in range(4, len(df_1.columns) - 2):
+                    if df_1.iloc[row + 1, col] > 0:
+                        result_list.append(df_1.columns[col])
+                        break
+    result = pd.DataFrame(result_list, columns=['New-Outcome'])
+    return result
+    
 # Processing function
 def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
+    print(f"Processing {smartsheet_file}, {system_file}, {sheet_used}, {num_start}, {num_end}")
     df_2 = pd.read_csv(smartsheet_file, skiprows=6)  # Skip the system docs info lines
     df_2['Vendor #'] = df_2['Vendor #'].astype(float)
     df_1 = read_until_null_excel(system_file, sheet_used)
@@ -97,12 +123,12 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
     
     df_2_sample  = df_2_sample.astype(float)
     df = pd.DataFrame(df_2_sample)
-    result = sum_pairs(df)
+    result = returnS_F(df)    
     
-    df_2 = df_2.loc[df_2['S/F/P'] == 'F']
-    df_2.iloc[:, 4:].astype(float)
-    df_2.iloc[:, 4:] = np.nan
-    df_2.iloc[:, 4:] = result
+    # Day First Valid => Ship/Confirmation
+    df_2 = df_2.loc[df_2['S/F/P'] == 'F'].reset_index(drop=True)
+    repeated_result = result.reindex(result.index.repeat(2)).reset_index(drop=True)
+    df_2['Date_First_Value'] = repeated_result
     
     # mapping section
     item_column = 'Item #'
@@ -118,9 +144,11 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
     
     df_check_v2 = pd.merge(df_check, df_1[['Vendor #', 'Group Number', 'Additional Component', 'Arcadia ETD', 'EC ETD', 'WC ETD','Categories']], on=['Group Number','Vendor #'], how='left')
     
-    start_column = df_check_v2.columns[num_start]
-    end_column = df_check_v2.columns[num_end]
-    df_check_v3 = first_non_null_column_name(df_check_v2, start_column, end_column, 'Date_First_Value')
+    # start_column = df_check_v2.columns[num_start]
+    # end_column = df_check_v2.columns[num_end]
+    # df_check_v3 = first_non_null_column_name(df_check_v2, start_column, end_column, 'Date_First_Value')
+    
+    df_check_v3 = df_check_v2
     
     current_year = datetime.now().strftime('%Y')
     df_check_v3['Date_First_Value'] = df_check_v3['Date_First_Value'].str.strip() + '/' + current_year
@@ -157,15 +185,21 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
     choices = [1, 2]
     df_filtered_next['Type'] = np.select(conditions, choices, default=3)
     df_filtered_next['Additional Component'] = df_filtered_next['Additional Component'].fillna('None')
+    
     # Replace non-date strings with NaN
     date_columns = ['Arcadia ETD System Final', 'EC ETD System Final', 'WC ETD System Final']
     df_filtered_next[date_columns] = df_filtered_next[date_columns].replace('0', np.nan)
-    # Fill NaN values with a placeholder date for aggregation purposes
-    placeholder_date = '9999-12-31'
-    df_filtered_next[date_columns] = df_filtered_next[date_columns].fillna(placeholder_date)
 
+    for col in date_columns:
+        df_filtered_next[col] = df_filtered_next[col].apply(parse_dates)
+        
+    # Fill NaN values with a placeholder date for aggregation purposes
+    placeholder_date = '1999-12-31'
+    df_filtered_next[date_columns] = df_filtered_next[date_columns].fillna(placeholder_date)
+        
     # Convert date columns to datetime
-    df_filtered_next[date_columns] = df_filtered_next[date_columns].apply(pd.to_datetime, format='%Y-%m-%d', errors='coerce')
+    df_filtered_next[date_columns] = df_filtered_next[date_columns].apply(pd.to_datetime, format='%Y-%m-%d')
+        
     df_new = df_filtered_next.groupby(['Categories','Item #', 'Group Number','Additional Component','Type','Vendor #','Check True/False','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet']).agg({
         'Whse': lambda x: set(x),
         'Arcadia ETD System Final': 'min',
@@ -173,12 +207,24 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
         'WC ETD System Final': 'min'
     }).reset_index()
     
-    #turn from datetime to object 
-    df_new[date_columns] = df_new[date_columns].replace(pd.NaT,'0')
+    #turn from datetime to object     
+    df_new = df_new[['Categories','Item #','Whse','Vendor #','Group Number','Additional Component','Arcadia ETD System Final','EC ETD System Final','WC ETD System Final','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet','Check True/False']]
+
+    for col in date_columns:
+        df_new[col] = df_new[col].dt.date
+
+    existing_columns = [col for col in date_columns if col in df_new.columns]
+    if existing_columns:
+        df_new[existing_columns] = df_new[existing_columns].astype(str)
+    else:
+        print("No valid columns found for conversion.")
     
-    df_new = df_new[['Categories','Item #','Whse','Vendor #','Group Number','Additional Component','Arcadia ETD System Final','EC ETD System Final','WC ETD System Final','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet']]
-    
+    # Export file
+    df_new.replace('1999-12-31', '0', inplace=True)
+
     df_new.to_excel('file_check.xlsx', index=False)
+    print("Processing complete. Exported to 'new_output_file.xlsx'.")
+
 
 # Function to open file dialogs and set file paths
 def open_smartsheet_file():
@@ -196,33 +242,39 @@ def open_system_file():
     for sheet in system_sheets_name:
         drop['menu'].add_command(label=sheet, command=lambda value=sheet: clicked.set(value))
 
+# Column numbers
+def retrieve_values():
+    num_start = num_start_var.get()
+    num_end = num_end_var.get()
+    return num_start, num_end
+
 # Show function for GUI
 def show():
     sheet_used = clicked.get()
     if sheet_used == "Choose the sheet of smartsheet":
         messagebox.showerror("Error", "Please select a valid sheet.")
     else:
+        num_start, num_end = retrieve_values()
         processing(smartsheet_file, system_file, sheet_used, num_start, num_end)
         messagebox.showinfo("Success", "Processing completed successfully!")
 
-# Column numbers
-num_start = 4
-num_end = 22
-
 # Create GUI
-root = Tk()
-root.geometry("400x200")
+root = tk.Tk()
+root.geometry("600x300")
 root.title("Sheet Selection")
 
 # Create frames for better organization
-frame1 = Frame(root)
+frame1 = tk.Frame(root)
 frame1.pack(pady=10, padx=10, fill='x')
 
-frame2 = Frame(root)
+frame2 = tk.Frame(root)
 frame2.pack(pady=10, padx=10, fill='x')
 
-frame3 = Frame(root)
+frame3 = tk.Frame(root)
 frame3.pack(pady=10, padx=10, fill='x')
+
+frame5 = tk.Frame(root)
+frame5.pack(pady=10, padx=10, fill='x')
 
 # Smartsheet file selection
 Label(frame1, text="Smartsheet File: ").pack(side=LEFT)
@@ -242,8 +294,21 @@ system_label.pack(side=LEFT)
 Label(frame3, text="Smartsheet Sheet Selection: ").pack(side=LEFT)
 clicked = StringVar()
 clicked.set("Choose the sheet of smartsheet")
-drop = OptionMenu(frame3, clicked, "Choose the sheet of smartsheet")
+drop = OptionMenu(frame3, clicked, "Sheet 1", "Sheet 2", "Sheet 3")  # Add actual sheet options
 drop.pack(side=LEFT)
+
+# Column start and end selection
+Label(frame5, text="Column Start: ").pack(side=LEFT)
+num_start_var = IntVar()
+num_start_var.set(4)  # Default value
+start_entry = Entry(frame5, textvariable=num_start_var)
+start_entry.pack(side=LEFT)
+
+Label(frame5, text="Column End: ").pack(side=LEFT)
+num_end_var = IntVar()
+num_end_var.set(22)  # Default value
+end_entry = Entry(frame5, textvariable=num_end_var)
+end_entry.pack(side=LEFT)
 
 # Process button
 button = Button(root, text="Process", command=show)
