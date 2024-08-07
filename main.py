@@ -92,7 +92,13 @@ def returnS_F(df_1):
                         break
     result = pd.DataFrame(result_list, columns=['New-Outcome'])
     return result
-    
+
+def remove_extension(filename,extentions):
+    for ext in extentions:
+        filename = str(filename)
+        filename = filename.replace(ext,'')
+    return filename
+
 # Processing function
 def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
     print(f"Processing {smartsheet_file}, {system_file}, {sheet_used}, {num_start}, {num_end}")
@@ -119,7 +125,7 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
     df_2['Item #'] = df_2['Item #'].str.replace('="', '').str.replace('"', '')
     
     df_2_sample = df_2.loc[(df_2['S/F/P'] == 'F') | (df_2['S/F/P'] == 'S')]
-    df_2_sample = df_2_sample.loc[:,df_2_sample.columns[4]:]
+    df_2_sample = df_2_sample.loc[:,df_2_sample.columns[num_start]:df_2_sample.columns[num_end]]
     
     df_2_sample  = df_2_sample.astype(float)
     df = pd.DataFrame(df_2_sample)
@@ -207,25 +213,35 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
         'WC ETD System Final': 'min'
     }).reset_index()
     
-    #turn from datetime to object     
+    # turn from datetime to string 
     df_new = df_new[['Categories','Item #','Whse','Vendor #','Group Number','Additional Component','Arcadia ETD System Final','EC ETD System Final','WC ETD System Final','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet','Check True/False']]
 
     for col in date_columns:
         df_new[col] = df_new[col].dt.date
 
     existing_columns = [col for col in date_columns if col in df_new.columns]
+
     if existing_columns:
         df_new[existing_columns] = df_new[existing_columns].astype(str)
     else:
         print("No valid columns found for conversion.")
-    
-    # Export file
+
     df_new.replace('1999-12-31', '0', inplace=True)
+    # Export file
 
-    df_new.to_excel('file_check.xlsx', index=False)
-    print("Processing complete. Exported to 'new_output_file.xlsx'.")
+    # Concatenate the results for the new filename
+    filename = system_file.split('/')[-1]
+    smartsheetname = smartsheet_file.split('/')[-1]
+    extension_to_remove = ['.xlsx', '.csv']
+    
+    # Remove extensions from filenames
+    clean_system_file = remove_extension(filename, extension_to_remove)
+    clean_smartsheet_file = remove_extension(smartsheetname, extension_to_remove)
+    # Example DataFrame operation (assuming df_new is defined)
+    new_filename = f'File_check [{clean_system_file} - {clean_smartsheet_file}].xlsx'
 
-
+    df_new.to_excel(new_filename, index=False)
+    print("Processing complete - Check the File in the respository.")
 # Function to open file dialogs and set file paths
 def open_smartsheet_file():
     global smartsheet_file
