@@ -177,7 +177,7 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
     
     current_year = datetime.now().strftime('%Y')
     df_check_v3['Date_First_Value'] = df_check_v3['Date_First_Value'].str.strip() + '/' + current_year
-    df_check_v3['Date_First_Value'] = pd.to_datetime(df_check_v3['Date_First_Value'], format='%m/%d/%Y', errors='coerce')
+    df_check_v3['Date_First_Value'] = pd.to_datetime(df_check_v3['Date_First_Value'], format='%m/%d/%Y')
     df_check_v3['Date_First_Value'] = df_check_v3['Date_First_Value'].dt.strftime('%Y-%m-%d')
     
     df_check_v3['Arcadia ETD System Final'] = np.where(df_check_v3['Arcadia ETD System'] == 1, df_check_v3['Date_First_Value'], 0)
@@ -202,17 +202,11 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
         'True', 'False'
     )
     df_filtered_next = df_filtered_next.loc[df_filtered_next['Whse'].isin({'1','15','17','ECR','42','28','5'})]
-    
-    conditions = [
-        df_filtered_next['Whse'].isin({'1'}),
-        df_filtered_next['Whse'].isin({'15', '17', 'ECR'})
-    ]
-    choices = [1, 2]
-    df_filtered_next['Type'] = np.select(conditions, choices, default=3)
     df_filtered_next['Additional Component'] = df_filtered_next['Additional Component'].fillna('None')
     
     # Replace non-date strings with NaN
-    date_columns = ['Arcadia ETD System Final', 'EC ETD System Final', 'WC ETD System Final']
+    date_columns = ['Arcadia ETD System Final','EC ETD System Final','WC ETD System Final','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet']
+    df_filtered_next[date_columns] = df_filtered_next[date_columns].astype(str)
     df_filtered_next[date_columns] = df_filtered_next[date_columns].replace('0', np.nan)
 
     for col in date_columns:
@@ -225,7 +219,7 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
     # Convert date columns to datetime
     df_filtered_next[date_columns] = df_filtered_next[date_columns].apply(pd.to_datetime, format='%Y-%m-%d')
         
-    df_new = df_filtered_next.groupby(['Categories','Item #', 'Group Number','Additional Component','Type','Vendor #','Check True/False','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet']).agg({
+    df_new = df_filtered_next.groupby(['Categories','Item #', 'Group Number','Additional Component','Vendor #','Check True/False','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet']).agg({
         'Whse': lambda x: set(x),
         'Arcadia ETD System Final': 'min',
         'EC ETD System Final': 'min',
@@ -245,26 +239,33 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
     else:
         print("No valid columns found for conversion.")
 
-    df_new.replace('1999-12-31', '0', inplace=True)
+    df_new = df_new.replace('1999-12-31', '0', inplace=False)
 
-    # Processing conditional formatting - sheet 2
-    df_new_1 = df_new
-    date_columns_1 = ['Arcadia ETD System Final','EC ETD System Final','WC ETD System Final','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet']
+    return df_new
+
+    # # Processing conditional formatting - sheet 2
+    # df_new_1 = df_new
+    # date_columns_1 = ['Arcadia ETD System Final','EC ETD System Final','WC ETD System Final','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet']
     
-    df_new_1[date_columns_1] = df_new_1[date_columns_1].astype(str)
-    df_new_1[date_columns_1] = df_new_1[date_columns_1].replace('0',np.nan)
-    place_nan = '1999-01-01'
-    df_new_1[date_columns_1] = df_new_1[date_columns_1].fillna(place_nan)
-    df_new_1[date_columns_1] = df_new_1[date_columns_1].apply(pd.to_datetime, format='%Y-%m-%d')
+    # df_new_1[date_columns_1] = df_new_1[date_columns_1].astype(str)
+    # df_new_1[date_columns_1] = df_new_1[date_columns_1].replace('0',np.nan)
+    # place_nan = '1999-01-01'
+    # df_new_1[date_columns_1] = df_new_1[date_columns_1].fillna(place_nan)
+    # df_new_1[date_columns_1] = df_new_1[date_columns_1].apply(pd.to_datetime, format='%Y-%m-%d')
     
-    df_new_1 = df_new_1[['Categories','Item #','Vendor #','Group Number','Additional Component','Arcadia ETD System Final','EC ETD System Final','WC ETD System Final','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet']]
+    # df_new_1 = df_new_1[['Categories','Item #','Vendor #','Group Number','Additional Component','Arcadia ETD System Final','EC ETD System Final','WC ETD System Final','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet']]
 
-    df_new_1 = df_new_1.groupby(['Categories', 'Item #','Vendor #','Group Number','Additional Component'])[date_columns_1].max().reset_index()
+    # df_new_1 = df_new_1.groupby(['Categories', 'Item #','Vendor #','Group Number','Additional Component'])[date_columns_1].max().reset_index()
 
-    styled_df = highlight_condition_Arca_EC(df_new_1, 'Arcadia ETD System Final', 'EC ETD System Final',date_columns_1)
+    # styled_df = highlight_condition_Arca_EC(df_new_1, 'Arcadia ETD System Final', 'EC ETD System Final',date_columns_1)
+
+    # df_new[date_columns_1] = df_new[date_columns_1].astype(str)
+    # df_new[date_columns_1] = df_new[date_columns_1].replace('1999-01-01','0')
 
 
     # Concatenate the results for the new filename
+
+def export_file(df,system_file,smartsheet_file):
     filename = system_file.split('/')[-1]
     smartsheetname = smartsheet_file.split('/')[-1]
     extension_to_remove = ['.xlsx', '.csv']
@@ -275,9 +276,7 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
     # Example DataFrame operation (assuming df_new is defined)
     new_filename = f'File_check [{clean_system_file} - {clean_smartsheet_file}].xlsx'
 
-    with pd.ExcelWriter(filename, engine='xlsxwriter') as writer:
-        df_new.to_excel(writer, sheet_name='Sheet1', index=False)
-        styled_df.to_excel(writer, sheet_name='Sheet2', index=False)
+    df.to_excel(new_filename, index = False, sheet_name= 'Check True False')
 
     print("Processing complete - Check the File in the respository.")
 # Function to open file dialogs and set file paths
@@ -305,11 +304,14 @@ def retrieve_values():
 # Show function for GUI
 def show():
     sheet_used = clicked.get()
+    # num_start = clicked.get()
+    # num_end = clicked.get()
     if sheet_used == "Choose the sheet of smartsheet":
         messagebox.showerror("Error", "Please select a valid sheet.")
     else:
         num_start, num_end = retrieve_values()
-        processing(smartsheet_file, system_file, sheet_used, num_start, num_end)
+        df_new = processing(smartsheet_file, system_file, sheet_used, num_start, num_end)
+        export_file(df_new, system_file, smartsheet_file)
         messagebox.showinfo("Success", "Processing completed successfully!")
 
 # Create GUI
