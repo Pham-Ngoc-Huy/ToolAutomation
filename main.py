@@ -4,6 +4,7 @@ from datetime import datetime
 from tkinter import *
 from tkinter import filedialog, messagebox
 import tkinter as tk
+
 # Function to read until null in Excel
 def read_until_null_excel(file_path, sheet_name):
     df = pd.read_excel(file_path, sheet_name=sheet_name)
@@ -98,6 +99,24 @@ def remove_extension(filename,extentions):
         filename = str(filename)
         filename = filename.replace(ext,'')
     return filename
+
+def highlight_condition_Arca_EC(df, s1, s2,date_columns_1):
+    # Define a function to apply to each row
+    def highlight(row):
+        # Initialize a list of empty styles for each column
+        styles = [''] * len(row)
+        
+        # Apply red background if the condition is met
+        if row[s1] < row[s2]:
+            styles[df.columns.get_loc(s1)] = 'background-color: red'
+            styles[df.columns.get_loc(s2)] = 'background-color: red'
+        
+        return styles
+    df[date_columns_1] = df[date_columns_1].astype(str)
+    df[date_columns_1] = df[date_columns_1].replace('1999-01-01', '0')
+    df['Vendor #'] = df['Vendor #'].astype(int)
+    # Apply the function row-wise
+    return df.style.apply(highlight, axis=1)
 
 # Processing function
 def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
@@ -227,7 +246,23 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
         print("No valid columns found for conversion.")
 
     df_new.replace('1999-12-31', '0', inplace=True)
-    # Export file
+
+    # Processing conditional formatting - sheet 2
+    df_new_1 = df_new
+    date_columns_1 = ['Arcadia ETD System Final','EC ETD System Final','WC ETD System Final','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet']
+    
+    df_new_1[date_columns_1] = df_new_1[date_columns_1].astype(str)
+    df_new_1[date_columns_1] = df_new_1[date_columns_1].replace('0',np.nan)
+    place_nan = '1999-01-01'
+    df_new_1[date_columns_1] = df_new_1[date_columns_1].fillna(place_nan)
+    df_new_1[date_columns_1] = df_new_1[date_columns_1].apply(pd.to_datetime, format='%Y-%m-%d')
+    
+    df_new_1 = df_new_1[['Categories','Item #','Vendor #','Group Number','Additional Component','Arcadia ETD System Final','EC ETD System Final','WC ETD System Final','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet']]
+
+    df_new_1 = df_new_1.groupby(['Categories', 'Item #','Vendor #','Group Number','Additional Component'])[date_columns_1].max().reset_index()
+
+    styled_df = highlight_condition_Arca_EC(df_new_1, 'Arcadia ETD System Final', 'EC ETD System Final',date_columns_1)
+
 
     # Concatenate the results for the new filename
     filename = system_file.split('/')[-1]
@@ -240,7 +275,10 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
     # Example DataFrame operation (assuming df_new is defined)
     new_filename = f'File_check [{clean_system_file} - {clean_smartsheet_file}].xlsx'
 
-    df_new.to_excel(new_filename, index=False)
+    with pd.ExcelWriter(filename, engine='xlsxwriter') as writer:
+        df_new.to_excel(writer, sheet_name='Sheet1', index=False)
+        styled_df.to_excel(writer, sheet_name='Sheet2', index=False)
+
     print("Processing complete - Check the File in the respository.")
 # Function to open file dialogs and set file paths
 def open_smartsheet_file():
