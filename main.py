@@ -196,12 +196,6 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
                                     'Arcadia ETD System Final', 'EC ETD System Final', 'WC ETD System Final',
                                     'Arcadia ETD Smartsheet', 'EC ETD Smartsheet', 'WC ETD Smartsheet']]
     
-    df_filtered_next['Check True/False'] = np.where(
-        (df_filtered_next['Arcadia ETD System Final'] == df_filtered_next['Arcadia ETD Smartsheet']) &
-        (df_filtered_next['EC ETD System Final'] == df_filtered_next['EC ETD Smartsheet']) &
-        (df_filtered_next['WC ETD System Final'] == df_filtered_next['WC ETD Smartsheet']),
-        'True', 'False'
-    )
     df_filtered_next = df_filtered_next.loc[df_filtered_next['Whse'].isin({'1','15','17','ECR','42','28','5'})]
     df_filtered_next['Additional Component'] = df_filtered_next['Additional Component'].fillna('None')
     
@@ -220,12 +214,19 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
     # Convert date columns to datetime
     df_filtered_next[date_columns] = df_filtered_next[date_columns].apply(pd.to_datetime, format='%Y-%m-%d')
         
-    df_new = df_filtered_next.groupby(['Categories','Item #', 'Group Number','Additional Component','Vendor #','Check True/False','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet']).agg({
+    df_new = df_filtered_next.groupby(['Categories','Item #', 'Group Number','Additional Component','Vendor #','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet']).agg({
         'Whse': lambda x: set(x),
         'Arcadia ETD System Final': 'min',
         'EC ETD System Final': 'min',
         'WC ETD System Final': 'min'
     }).reset_index()
+    
+    df_new['Check True/False'] = np.where(
+        (df_new['Arcadia ETD System Final'] == df_new['Arcadia ETD Smartsheet']) &
+        (df_new['EC ETD System Final'] == df_new['EC ETD Smartsheet']) &
+        (df_new['WC ETD System Final'] == df_new['WC ETD Smartsheet']),
+        'True', 'False'
+    )
     
     # turn from datetime to string 
     df_new = df_new[['Categories','Item #','Whse','Vendor #','Group Number','Additional Component','Arcadia ETD System Final','EC ETD System Final','WC ETD System Final','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet','Check True/False']]
@@ -301,30 +302,26 @@ def open_system_file():
 
 # Function to update start and end column dropdown based on selected sheet
 def update_column_options(*args):
-    sheet_used = clicked.get()
-    if sheet_used != "Choose the sheet":
-        df = pd.read_excel(system_file, sheet_name=sheet_used)
-        
-        # Update start options
-        start_options = list(range(4, len(df.columns)))  # Start from 4 to len(columns) - 1
-        num_start_var.set(start_options[0])  # Set default value
-        start_menu['menu'].delete(0, 'end')  # Clear existing options
-        for option in start_options:
-            start_menu['menu'].add_command(label=option, command=tk._setit(num_start_var, option))
+    df = pd.read_csv(smartsheet_file, skiprows = 6)
+    
+    # Update start options
+    start_options = list(range(4, len(df.columns)-1))  # Start from 4 to len(columns) - 1
+    num_start_var.set(start_options[0])  # Set default value
+    start_menu['menu'].delete(0, 'end')  # Clear existing options
+    for option in start_options:
+        start_menu['menu'].add_command(label=option, command=tk._setit(num_start_var, option))
 
-        # Update end options based on the start column selected
-        update_end_options()
+    # Update end options based on the start column selected
+    update_end_options()
 
 def update_end_options(*args):
-    sheet_used = clicked.get()
-    if sheet_used != "Choose the sheet":
-        df = pd.read_excel(system_file, sheet_name=sheet_used)
-        start = num_start_var.get()
-        end_options = list(range(start + 1, len(df.columns) + 1))  # End options start from num_start + 1
-        num_end_var.set(end_options[0])  # Set default value for num_end_var
-        end_menu['menu'].delete(0, 'end')  # Clear existing options
-        for option in end_options:
-            end_menu['menu'].add_command(label=option, command=tk._setit(num_end_var, option))
+    df = pd.read_csv(smartsheet_file, skiprows = 6)
+    start = num_start_var.get()
+    end_options = list(range(start + 1, len(df.columns)))  # End options start from num_start + 1
+    num_end_var.set(end_options[0])  # Set default value for num_end_var
+    end_menu['menu'].delete(0, 'end')  # Clear existing options
+    for option in end_options:
+        end_menu['menu'].add_command(label=option, command=tk._setit(num_end_var, option))
 
 # Retrieve start and end column numbers
 def retrieve_values():
