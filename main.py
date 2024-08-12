@@ -360,14 +360,14 @@ frame5 = tk.Frame(root)
 frame5.pack(pady=10, padx=10, fill='x')
 
 # Smartsheet file selection
-Label(frame1, text="Smartsheet File: ").pack(side=LEFT)
+Label(frame1, text="System File: ").pack(side=LEFT)
 smartsheet_button = Button(frame1, text="Select File", command=open_smartsheet_file)
 smartsheet_button.pack(side=LEFT)
 smartsheet_label = Label(frame1, text="No file selected")
 smartsheet_label.pack(side=LEFT)
 
 # System file selection
-Label(frame2, text="System File: ").pack(side=LEFT)
+Label(frame2, text="Smartsheet File: ").pack(side=LEFT)
 system_button = Button(frame2, text="Select File", command=open_system_file)
 system_button.pack(side=LEFT)
 system_label = Label(frame2, text="No file selected")
