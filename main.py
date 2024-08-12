@@ -115,7 +115,7 @@ def highlight_condition_Arca_EC(df, s1, s2,date_columns_1):
         
         return styles
     df[date_columns_1] = df[date_columns_1].astype(str)
-    df[date_columns_1] = df[date_columns_1].replace('1999-01-01', ' ')
+    df[date_columns_1] = df[date_columns_1].replace('1999-01-01', '0')
     df['Vendor #'] = df['Vendor #'].astype(int)
     # Apply the function row-wise
     return df.style.apply(highlight, axis=1)
@@ -240,7 +240,7 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
     else:
         print("No valid columns found for conversion.")
 
-    df_new = df_new.replace(placeholder_date, ' ', inplace=False)
+    df_new = df_new.replace(placeholder_date, '0', inplace=False)
 
     return df_new
 
