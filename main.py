@@ -229,7 +229,9 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
     )
     
     # turn from datetime to string 
-    df_new = df_new[['Categories','Item #','Whse','Vendor #','Group Number','Additional Component','Arcadia ETD System Final','EC ETD System Final','WC ETD System Final','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet','Check True/False']]
+    df_new = df_new[['Categories','Item #','Whse','Vendor #','Group Number','Additional Component',
+                     'Arcadia ETD System Final','EC ETD System Final','WC ETD System Final'
+                     ,'Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet','Check True/False']]
 
     for col in date_columns:
         df_new[col] = df_new[col].dt.date
@@ -257,7 +259,9 @@ def processing_2(df_new):
     df_new_1[date_columns_1] = df_new_1[date_columns_1].fillna(place_nan)
     df_new_1[date_columns_1] = df_new_1[date_columns_1].apply(pd.to_datetime, format='%Y-%m-%d')
     
-    df_new_1 = df_new_1[['Categories','Item #','Vendor #','Group Number','Additional Component','Arcadia ETD System Final','EC ETD System Final','WC ETD System Final','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet']]
+    df_new_1 = df_new_1[['Categories','Item #','Vendor #','Group Number','Additional Component',
+                         'Arcadia ETD System Final','EC ETD System Final','WC ETD System Final','Arcadia ETD Smartsheet',
+                         'EC ETD Smartsheet','WC ETD Smartsheet']]
 
     df_new_1 = df_new_1.groupby(['Categories', 'Item #','Vendor #','Group Number','Additional Component'])[date_columns_1].max().reset_index()
 
