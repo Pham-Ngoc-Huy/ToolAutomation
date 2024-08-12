@@ -80,17 +80,19 @@ def returnS_F(df_1):
     result_list = []
     for row in range(0, len(df_1), 2):
         found = False
-        for col in range(4, len(df_1.columns) - 2):
+        for col in range(0, len(df_1.columns),1):
             if df_1.iloc[row, col] > 0:
                 result_list.append(df_1.columns[col])
                 found = True
                 break
+        if not found and row + 1 < len(df_1):
+            for col in range(0, len(df_1.columns),1):
+                if df_1.iloc[row + 1, col] > 0:
+                    result_list.append(df_1.columns[col])
+                    found = True
+                    break
         if not found:
-            if row + 1 < len(df_1):
-                for col in range(4, len(df_1.columns) - 2):
-                    if df_1.iloc[row + 1, col] > 0:
-                        result_list.append(df_1.columns[col])
-                        break
+            result_list.append("")
     result = pd.DataFrame(result_list, columns=['New-Outcome'])
     return result
 
@@ -113,12 +115,12 @@ def highlight_condition_Arca_EC(df, s1, s2,date_columns_1):
         
         return styles
     df[date_columns_1] = df[date_columns_1].astype(str)
-    df[date_columns_1] = df[date_columns_1].replace('1999-01-01', '0')
+    df[date_columns_1] = df[date_columns_1].replace('1999-01-01', ' ')
     df['Vendor #'] = df['Vendor #'].astype(int)
     # Apply the function row-wise
     return df.style.apply(highlight, axis=1)
 
-# Processing function
+# Processing function - sheet 1
 def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
     print(f"Processing {smartsheet_file}, {system_file}, {sheet_used}, {num_start}, {num_end}")
     df_2 = pd.read_csv(smartsheet_file, skiprows=6)  # Skip the system docs info lines
@@ -152,8 +154,7 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
     
     # Day First Valid => Ship/Confirmation
     df_2 = df_2.loc[df_2['S/F/P'] == 'F'].reset_index(drop=True)
-    repeated_result = result.reindex(result.index.repeat(2)).reset_index(drop=True)
-    df_2['Date_First_Value'] = repeated_result
+    df_2['Date_First_Value'] = result
     
     # mapping section
     item_column = 'Item #'
@@ -169,21 +170,21 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
     
     df_check_v2 = pd.merge(df_check, df_1[['Vendor #', 'Group Number', 'Additional Component', 'Arcadia ETD', 'EC ETD', 'WC ETD','Categories']], on=['Group Number','Vendor #'], how='left')
     
-    # start_column = df_check_v2.columns[num_start]
-    # end_column = df_check_v2.columns[num_end]
-    # df_check_v3 = first_non_null_column_name(df_check_v2, start_column, end_column, 'Date_First_Value')
-    
-    df_check_v3 = df_check_v2
+    df_check_v3 = df_check_v2.copy()
     
     current_year = datetime.now().strftime('%Y')
+
+    #pretend solution - not the official - need medicate here !!!!
     df_check_v3['Date_First_Value'] = df_check_v3['Date_First_Value'].str.strip() + '/' + current_year
+    df_check_v3['Date_First_Value'] = df_check_v3['Date_First_Value'].replace('/2024','01/01/2027')
     df_check_v3['Date_First_Value'] = pd.to_datetime(df_check_v3['Date_First_Value'], format='%m/%d/%Y')
     df_check_v3['Date_First_Value'] = df_check_v3['Date_First_Value'].dt.strftime('%Y-%m-%d')
+    df_check_v3['Date_First_Value'] = df_check_v3['Date_First_Value'].replace('2027-01-01','0')
     
     df_check_v3['Arcadia ETD System Final'] = np.where(df_check_v3['Arcadia ETD System'] == 1, df_check_v3['Date_First_Value'], 0)
     df_check_v3['EC ETD System Final'] = np.where(df_check_v3['EC ETD System'] == 1, df_check_v3['Date_First_Value'], 0)
     df_check_v3['WC ETD System Final'] = np.where(df_check_v3['WC ETD System'] == 1, df_check_v3['Date_First_Value'], 0)
-    
+
     for col in ['Arcadia ETD', 'EC ETD', 'WC ETD']:
         df_check_v3[col] = df_check_v3[col].dt.strftime('%Y-%m-%d')
     
@@ -213,7 +214,7 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
         df_filtered_next[col] = df_filtered_next[col].apply(parse_dates)
         
     # Fill NaN values with a placeholder date for aggregation purposes
-    placeholder_date = '1999-12-31'
+    placeholder_date = '2027-12-31'
     df_filtered_next[date_columns] = df_filtered_next[date_columns].fillna(placeholder_date)
         
     # Convert date columns to datetime
@@ -239,47 +240,48 @@ def processing(smartsheet_file, system_file, sheet_used, num_start, num_end):
     else:
         print("No valid columns found for conversion.")
 
-    df_new = df_new.replace('1999-12-31', '0', inplace=False)
+    df_new = df_new.replace(placeholder_date, ' ', inplace=False)
 
     return df_new
 
-    # # Processing conditional formatting - sheet 2
-    # df_new_1 = df_new
-    # date_columns_1 = ['Arcadia ETD System Final','EC ETD System Final','WC ETD System Final','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet']
+# Processing conditional formatting - sheet 2
+def processing_2(df_new):
+    df_new_1 = df_new.copy()
+
+    date_columns_1 = ['Arcadia ETD System Final','EC ETD System Final','WC ETD System Final','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet']
     
-    # df_new_1[date_columns_1] = df_new_1[date_columns_1].astype(str)
-    # df_new_1[date_columns_1] = df_new_1[date_columns_1].replace('0',np.nan)
-    # place_nan = '1999-01-01'
-    # df_new_1[date_columns_1] = df_new_1[date_columns_1].fillna(place_nan)
-    # df_new_1[date_columns_1] = df_new_1[date_columns_1].apply(pd.to_datetime, format='%Y-%m-%d')
+    df_new_1[date_columns_1] = df_new_1[date_columns_1].astype(str)
+    df_new_1[date_columns_1] = df_new_1[date_columns_1].replace('0',np.nan)
+    place_nan = '1999-01-01'
+    df_new_1[date_columns_1] = df_new_1[date_columns_1].fillna(place_nan)
+    df_new_1[date_columns_1] = df_new_1[date_columns_1].apply(pd.to_datetime, format='%Y-%m-%d')
     
-    # df_new_1 = df_new_1[['Categories','Item #','Vendor #','Group Number','Additional Component','Arcadia ETD System Final','EC ETD System Final','WC ETD System Final','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet']]
+    df_new_1 = df_new_1[['Categories','Item #','Vendor #','Group Number','Additional Component','Arcadia ETD System Final','EC ETD System Final','WC ETD System Final','Arcadia ETD Smartsheet','EC ETD Smartsheet','WC ETD Smartsheet']]
 
-    # df_new_1 = df_new_1.groupby(['Categories', 'Item #','Vendor #','Group Number','Additional Component'])[date_columns_1].max().reset_index()
+    df_new_1 = df_new_1.groupby(['Categories', 'Item #','Vendor #','Group Number','Additional Component'])[date_columns_1].max().reset_index()
 
-    # styled_df = highlight_condition_Arca_EC(df_new_1, 'Arcadia ETD System Final', 'EC ETD System Final',date_columns_1)
+    styled_df = highlight_condition_Arca_EC(df_new_1, 'Arcadia ETD System Final', 'EC ETD System Final',date_columns_1)
 
-    # df_new[date_columns_1] = df_new[date_columns_1].astype(str)
-    # df_new[date_columns_1] = df_new[date_columns_1].replace('1999-01-01','0')
+    return styled_df
 
-
-    # Concatenate the results for the new filename
-
-def export_file(df,system_file,smartsheet_file):
+# Concatenate the results for the new filename
+def export_file(df1, df2, system_file, smartsheet_file):
     filename = system_file.split('/')[-1]
     smartsheetname = smartsheet_file.split('/')[-1]
     extension_to_remove = ['.xlsx', '.csv']
     
-    # Remove extensions from filenames
     clean_system_file = remove_extension(filename, extension_to_remove)
     clean_smartsheet_file = remove_extension(smartsheetname, extension_to_remove)
-    # Example DataFrame operation (assuming df_new is defined)
+    
     new_filename = f'File_check [{clean_system_file} - {clean_smartsheet_file}].xlsx'
+    
+    # Create an Excel writer object
+    with pd.ExcelWriter(new_filename, engine='xlsxwriter') as writer:
+        df1.to_excel(writer, index=False, sheet_name='Check True False')
+        df2.to_excel(writer, index=False, sheet_name='Condition Formatting')
+    
+    print("Processing complete - Check the file in the repository.")
 
-    df.to_excel(new_filename, index = False, sheet_name= 'Check True False')
-
-    print("Processing complete - Check the File in the respository.")
-# Function to open file dialogs and set file paths
 def open_smartsheet_file():
     global smartsheet_file
     smartsheet_file = filedialog.askopenfilename(title="Select Smartsheet File", filetypes=[("CSV Files", "*.csv")])
@@ -290,12 +292,41 @@ def open_system_file():
     system_file = filedialog.askopenfilename(title="Select System File", filetypes=[("Excel Files", "*.xlsx")])
     system_sheets_name = pd.ExcelFile(system_file).sheet_names
     system_label.config(text=system_file.split('/')[-1])
-    clicked.set("Choose the sheet of smartsheet")
+    
+    # Update dropdown with sheet names
+    clicked.set("Choose the sheet")
     drop['menu'].delete(0, 'end')
     for sheet in system_sheets_name:
         drop['menu'].add_command(label=sheet, command=lambda value=sheet: clicked.set(value))
 
-# Column numbers
+# Function to update start and end column dropdown based on selected sheet
+def update_column_options(*args):
+    sheet_used = clicked.get()
+    if sheet_used != "Choose the sheet":
+        df = pd.read_excel(system_file, sheet_name=sheet_used)
+        
+        # Update start options
+        start_options = list(range(4, len(df.columns)))  # Start from 4 to len(columns) - 1
+        num_start_var.set(start_options[0])  # Set default value
+        start_menu['menu'].delete(0, 'end')  # Clear existing options
+        for option in start_options:
+            start_menu['menu'].add_command(label=option, command=tk._setit(num_start_var, option))
+
+        # Update end options based on the start column selected
+        update_end_options()
+
+def update_end_options(*args):
+    sheet_used = clicked.get()
+    if sheet_used != "Choose the sheet":
+        df = pd.read_excel(system_file, sheet_name=sheet_used)
+        start = num_start_var.get()
+        end_options = list(range(start + 1, len(df.columns) + 1))  # End options start from num_start + 1
+        num_end_var.set(end_options[0])  # Set default value for num_end_var
+        end_menu['menu'].delete(0, 'end')  # Clear existing options
+        for option in end_options:
+            end_menu['menu'].add_command(label=option, command=tk._setit(num_end_var, option))
+
+# Retrieve start and end column numbers
 def retrieve_values():
     num_start = num_start_var.get()
     num_end = num_end_var.get()
@@ -304,14 +335,13 @@ def retrieve_values():
 # Show function for GUI
 def show():
     sheet_used = clicked.get()
-    # num_start = clicked.get()
-    # num_end = clicked.get()
-    if sheet_used == "Choose the sheet of smartsheet":
+    if sheet_used == "Choose the sheet":
         messagebox.showerror("Error", "Please select a valid sheet.")
     else:
         num_start, num_end = retrieve_values()
         df_new = processing(smartsheet_file, system_file, sheet_used, num_start, num_end)
-        export_file(df_new, system_file, smartsheet_file)
+        df_styled = processing_2(df_new)
+        export_file(df_new, df_styled, system_file, smartsheet_file)
         messagebox.showinfo("Success", "Processing completed successfully!")
 
 # Create GUI
@@ -347,24 +377,25 @@ system_label = Label(frame2, text="No file selected")
 system_label.pack(side=LEFT)
 
 # Sheet selection dropdown
-Label(frame3, text="Smartsheet Sheet Selection: ").pack(side=LEFT)
+Label(frame3, text="Smartsheet Sheet Selection: ").pack(side=tk.LEFT)
 clicked = StringVar()
-clicked.set("Choose the sheet of smartsheet")
-drop = OptionMenu(frame3, clicked, "Sheet 1", "Sheet 2", "Sheet 3")  # Add actual sheet options
-drop.pack(side=LEFT)
+clicked.set("Choose the sheet")
+drop = OptionMenu(frame3, clicked, "Sheet 1", "Sheet 2", "Sheet 3")  # Dummy options; updated by open_system_file()
+drop.pack(side=tk.LEFT)
+clicked.trace("w", update_column_options)
 
-# Column start and end selection
-Label(frame5, text="Column Start: ").pack(side=LEFT)
+Label(frame5, text="Column Start: ").pack(side=tk.LEFT)
 num_start_var = IntVar()
 num_start_var.set(4)  # Default value
-start_entry = Entry(frame5, textvariable=num_start_var)
-start_entry.pack(side=LEFT)
+start_menu = OptionMenu(frame5, num_start_var, [])  # Empty list, updated later
+start_menu.pack(side=tk.LEFT)
+num_start_var.trace("w", update_end_options)  # Update end options when start changes
 
-Label(frame5, text="Column End: ").pack(side=LEFT)
+# Column end dropdown
+Label(frame5, text="Column End: ").pack(side=tk.LEFT)
 num_end_var = IntVar()
-num_end_var.set(22)  # Default value
-end_entry = Entry(frame5, textvariable=num_end_var)
-end_entry.pack(side=LEFT)
+end_menu = OptionMenu(frame5, num_end_var, [])  # Empty list, updated later
+end_menu.pack(side=tk.LEFT)
 
 # Process button
 button = Button(root, text="Process", command=show)
